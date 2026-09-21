@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Document Discrepancy Detector</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f8f9fb;
+            color: #1f2937;
+        }
+
+        .page {
+            max-width: 760px;
+            margin: 70px auto;
+            padding: 0 20px;
+        }
+
+        h1 {
+            font-size: 36px;
+            margin: 0 0 8px;
+            color: #111827;
+        }
+
+        .subtitle {
+            font-size: 17px;
+            line-height: 1.5;
+            color: #6b7280;
+            margin-bottom: 22px;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 26px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        }
+
+        input[type="file"] {
+            margin-bottom: 18px;
+            font-size: 14px;
+        }
+
+        button {
+            display: inline-block;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 7px;
+            padding: 12px 20px;
+            font-size: 15px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            margin-top: 16px;
+            color: #6b7280;
+        }
+
+        .error {
+            margin-top: 16px;
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            padding: 14px 0;
+            border-bottom: 1px solid #eceff3;
+        }
+
+        .result-row:last-child {
+            border-bottom: none;
+        }
+
+        .label {
+            color: #6b7280;
+            font-size: 16px;
+        }
+
+        .value {
+            color: #111827;
+            font-weight: 600;
+            text-align: right;
+            word-break: break-word;
+        }
+
+        .status-pill {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .valid {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .expired {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .expiring {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .manual {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .open {
+            background: #ffedd5;
+            color: #9a3412;
+        }
+
+        .none {
+            color: #6b7280;
+        }
+
+        @media (max-width: 600px) {
+            .page {
+                margin: 30px auto;
+            }
+
+            h1 {
+                font-size: 28px;
+            }
+
+            .result-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .value {
+                text-align: left;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="page">
+
+    <h1>Document Discrepancy Detector</h1>
+
+    <div class="subtitle">
+        Upload an employee's ID or certificate (PDF, JPG, or PNG).
+        It is OCR'd with Azure AI Document Intelligence, checked for expiry status,
+        and compared against the record on file.
+    </div>
+
+    <div class="card">
+
+        <input
+            type="file"
+            id="fileInput"
+            accept=".pdf,.jpg,.jpeg,.png"
+        >
+
+        <br>
+
+        <button onclick="analyzeDocument()">
+            Analyze Document
+        </button>
+
+        <div id="loading" class="loading hidden">
+            Analyzing document...
+        </div>
+
+        <div id="errorBox" class="error hidden"></div>
+
+    </div>
+
+
+    <div id="resultCard" class="card hidden">
+
+        <div class="result-row">
+            <div class="label">Filename</div>
+            <div class="value" id="filename"></div>
+        </div>
+
+        <div class="result-row">
+            <div class="label">Employee ID</div>
+            <div class="value" id="employeeId"></div>
+        </div>
+
+        <div class="result-row">
+            <div class="label">Expiry Date</div>
+            <div class="value" id="expiryDate"></div>
+        </div>
+
+        <div class="result-row">
+            <div class="label">OCR Confidence</div>
+            <div class="value" id="confidence"></div>
+        </div>
+
+        <div class="result-row">
+            <div class="label">Document Status</div>
+            <div class="value">
+                <span id="documentStatus" class="status-pill"></span>
+            </div>
+        </div>
+
+        <div class="result-row">
+            <div class="label">Database Expiry</div>
+            <div class="value" id="databaseExpiry"></div>
+        </div>
+
+        <div class="result-row">
+            <div class="label">Discrepancy Status</div>
+            <div class="value">
+                <span id="discrepancyStatus"></span>
+            </div>
+        </div>
+        <div class="result-row">
+            <div class="label">Discrepancy Reason</div>
+            <div class="value" id="discrepancyReason"></div>
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+async function analyzeDocument() {
+
+    const fileInput = document.getElementById("fileInput");
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert("Please select a document first.");
+        return;
+    }
+
+    const loading = document.getElementById("loading");
+    const errorBox = document.getElementById("errorBox");
+    const resultCard = document.getElementById("resultCard");
+
+    loading.classList.remove("hidden");
+    errorBox.classList.add("hidden");
+    resultCard.classList.add("hidden");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+
+        const response = await fetch("/analyze", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.detail || "Document analysis failed."
+            );
+        }
+
+        showResult(data);
+
+    }
+    catch (error) {
+
+        errorBox.textContent = error.message;
+        errorBox.classList.remove("hidden");
+
+    }
+    finally {
+
+        loading.classList.add("hidden");
+
+    }
+}
+
+
+function showResult(data) {
+
+    document.getElementById("resultCard")
+        .classList.remove("hidden");
+
+
+    document.getElementById("filename")
+        .textContent =
+        data.filename || "N/A";
+
+
+    document.getElementById("employeeId")
+        .textContent =
+        data.employee_id || "Not detected";
+
+
+    let expiryDisplay = "Not detected";
+
+    if (data.expiry_date) {
+
+        expiryDisplay = data.expiry_date;
+
+        if (data.expiry_date_text) {
+
+            expiryDisplay +=
+                ` (from "${data.expiry_date_text}")`;
+
+        }
+    }
+
+    document.getElementById("expiryDate")
+        .textContent =
+        expiryDisplay;
+
+
+    let confidence = "N/A";
+
+    if (
+        data.ocr_confidence !== null &&
+        data.ocr_confidence !== undefined
+    ) {
+
+        confidence =
+            (data.ocr_confidence * 100)
+            .toFixed(1) + "%";
+
+    }
+
+    document.getElementById("confidence")
+        .textContent =
+        confidence;
+
+
+    const status =
+        document.getElementById("documentStatus");
+
+    status.textContent =
+        data.document_status || "UNKNOWN";
+
+    status.className =
+        "status-pill";
+
+    if (data.document_status === "VALID") {
+
+        status.classList.add("valid");
+
+    }
+    else if (data.document_status === "EXPIRED") {
+
+        status.classList.add("expired");
+
+    }
+    else if (data.document_status === "EXPIRING_SOON") {
+
+        status.classList.add("expiring");
+
+    }
+    else {
+
+        status.classList.add("manual");
+
+    }
+
+
+    document.getElementById("databaseExpiry")
+        .textContent =
+        data.database_expiry || "No employee match";
+
+
+    const discrepancyStatus =
+        document.getElementById("discrepancyStatus");
+
+    if (data.discrepancy) {
+
+        discrepancyStatus.textContent =
+            data.discrepancy_status || "OPEN";
+
+        discrepancyStatus.className =
+            "status-pill open";
+
+    }
+    else {
+
+        discrepancyStatus.textContent =
+            "None";
+
+        discrepancyStatus.className =
+            "none";
+
+    }
+    if (data.discrepancy) {
+
+        if (
+            data.discrepancy_reason ===
+            "EXPIRY_DATE_MISMATCH"
+        ) {
+
+            discrepancyReason.textContent =
+                "Expiry date in the document does not match the database record.";
+
+        }
+        else {
+
+            discrepancyReason.textContent =
+                data.discrepancy_reason || "Discrepancy detected";
+
+        }
+
+    }
+    else {
+
+        discrepancyReason.textContent = "None";
+
+    }
+
+}
+
+</script>
+
+</body>
+</html>

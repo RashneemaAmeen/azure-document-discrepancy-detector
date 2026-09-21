@@ -1,0 +1,19 @@
+Suggested database entries for these PDFs:
+
+EMP2001  certificate CERT-2001  DB expiry 2027-02-10
+  PDF expiry 2026-02-10 -> EXPIRED + MISMATCH
+
+EMP2002  certificate CERT-2002  DB expiry 2027-10-05
+  PDF expiry 2026-10-05 -> EXPIRING_SOON + MISMATCH (around 2026-09-21)
+
+EMP2003  certificate CERT-2003  DB expiry 2027-03-20
+  PDF expiry 2028-03-20 -> VALID + MISMATCH
+
+EMP2004  certificate CERT-2004  DB expiry 2027-06-12
+  PDF expiry 2027-06-12 -> VALID + MATCH
+
+EMP2005  certificate CERT-2005  DB expiry 2028-01-01
+  PDF expiry 2027-01-01 -> VALID + MISMATCH
+
+If you seed these records into employee_documents and upload each PDF,
+you should get multiple independent OPEN entries in the discrepancies table.

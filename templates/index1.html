@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Document Discrepancy Detector</title>
+
+    <style>
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        h1 {
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        input[type="file"] {
+            margin-top: 15px;
+            margin-bottom: 15px;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .status {
+            font-weight: bold;
+            padding: 8px 12px;
+            border-radius: 5px;
+            display: inline-block;
+        }
+
+        .valid {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .expired {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .manual {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .row {
+            margin-bottom: 10px;
+        }
+
+        .label {
+            font-weight: bold;
+            display: inline-block;
+            min-width: 180px;
+        }
+
+        .discrepancy-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff7ed;
+            border-left: 5px solid #f97316;
+        }
+
+        .error {
+            background: #fee2e2;
+            padding: 15px;
+            color: #991b1b;
+            border-radius: 6px;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+<div class="container">
+
+    <div class="card">
+
+        <h1>
+            Document Discrepancy Detector
+        </h1>
+
+        <p>
+            Upload a PDF, JPG or PNG document.
+            The system will analyze it using Azure AI
+            Document Intelligence.
+        </p>
+
+        <input
+            type="file"
+            id="fileInput"
+            accept=".pdf,.jpg,.jpeg,.png"
+        >
+
+        <br>
+
+        <button onclick="analyzeDocument()">
+            Analyze Document
+        </button>
+
+        <p id="loading" class="hidden">
+            Analyzing document...
+        </p>
+
+        <div
+            id="errorBox"
+            class="error hidden"
+        ></div>
+
+    </div>
+
+
+    <div
+        id="resultCard"
+        class="card hidden"
+    >
+
+        <h2>
+            Analysis Result
+        </h2>
+
+        <div class="row">
+            <span class="label">
+                File:
+            </span>
+            <span id="filename"></span>
+        </div>
+
+        <div class="row">
+            <span class="label">
+                Employee ID:
+            </span>
+            <span id="employeeId"></span>
+        </div>
+
+        <div class="row">
+            <span class="label">
+                Expiry Date:
+            </span>
+            <span id="expiryDate"></span>
+        </div>
+
+        <div class="row">
+            <span class="label">
+                OCR Confidence:
+            </span>
+            <span id="confidence"></span>
+        </div>
+
+        <div class="row">
+
+            <span class="label">
+                Document Status:
+            </span>
+
+            <span
+                id="documentStatus"
+                class="status"
+            ></span>
+
+        </div>
+
+
+        <div
+            id="databaseSection"
+            class="hidden"
+        >
+
+            <hr>
+
+            <h2>
+                Database Comparison
+            </h2>
+
+            <div class="row">
+                <span class="label">
+                    Database Expiry:
+                </span>
+                <span id="databaseExpiry"></span>
+            </div>
+
+            <div
+                id="discrepancyBox"
+                class="discrepancy-box hidden"
+            >
+
+                <strong>
+                    Discrepancy Detected
+                </strong>
+
+                <p>
+                    The expiry date in the uploaded document
+                    does not match the value stored in the database.
+                </p>
+
+                <p>
+                    Status:
+                    <strong id="discrepancyStatus"></strong>
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+async function analyzeDocument() {
+
+    const fileInput =
+        document.getElementById("fileInput");
+
+    const file =
+        fileInput.files[0];
+
+
+    if (!file) {
+
+        alert(
+            "Please select a document first."
+        );
+
+        return;
+    }
+
+
+    const loading =
+        document.getElementById("loading");
+
+    const resultCard =
+        document.getElementById("resultCard");
+
+    const errorBox =
+        document.getElementById("errorBox");
+
+
+    loading.classList.remove("hidden");
+
+    resultCard.classList.add("hidden");
+
+    errorBox.classList.add("hidden");
+
+
+    const formData =
+        new FormData();
+
+    formData.append(
+        "file",
+        file
+    );
+
+
+    try {
+
+        const response =
+            await fetch(
+                "/analyze",
+                {
+                    method: "POST",
+                    body: formData
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.detail ||
+                "Document analysis failed."
+            );
+        }
+
+
+        showResult(data);
+
+    }
+
+    catch (error) {
+
+        errorBox.textContent =
+            error.message;
+
+        errorBox.classList.remove("hidden");
+
+    }
+
+    finally {
+
+        loading.classList.add("hidden");
+
+    }
+
+}
+
+
+
+function showResult(data) {
+
+    const resultCard =
+        document.getElementById("resultCard");
+
+    resultCard.classList.remove("hidden");
+
+
+    document.getElementById(
+        "filename"
+    ).textContent =
+        data.filename || "N/A";
+
+
+    document.getElementById(
+        "employeeId"
+    ).textContent =
+        data.employee_id || "Not detected";
+
+
+    document.getElementById(
+        "expiryDate"
+    ).textContent =
+        data.expiry_date || "Not detected";
+
+
+    let confidence = "N/A";
+
+    if (
+        data.ocr_confidence !== null
+        &&
+        data.ocr_confidence !== undefined
+    ) {
+
+        confidence =
+            (
+                data.ocr_confidence * 100
+            ).toFixed(1)
+            + "%";
+
+    }
+
+
+    document.getElementById(
+        "confidence"
+    ).textContent =
+        confidence;
+
+
+    const statusElement =
+        document.getElementById(
+            "documentStatus"
+        );
+
+
+    statusElement.textContent =
+        data.document_status;
+
+
+    statusElement.className =
+        "status";
+
+
+    if (
+        data.document_status === "VALID"
+    ) {
+
+        statusElement.classList.add(
+            "valid"
+        );
+
+    }
+
+    else if (
+        data.document_status === "EXPIRED"
+    ) {
+
+        statusElement.classList.add(
+            "expired"
+        );
+
+    }
+
+    else if (
+        data.document_status ===
+        "EXPIRING_SOON"
+    ) {
+
+        statusElement.classList.add(
+            "warning"
+        );
+
+    }
+
+    else {
+
+        statusElement.classList.add(
+            "manual"
+        );
+
+    }
+
+
+    const databaseSection =
+        document.getElementById(
+            "databaseSection"
+        );
+
+
+    if (data.database_expiry) {
+
+        databaseSection
+            .classList
+            .remove("hidden");
+
+
+        document.getElementById(
+            "databaseExpiry"
+        ).textContent =
+            data.database_expiry;
+
+    }
+
+    else {
+
+        databaseSection
+            .classList
+            .add("hidden");
+
+    }
+
+
+    const discrepancyBox =
+        document.getElementById(
+            "discrepancyBox"
+        );
+
+
+    if (data.discrepancy) {
+
+        discrepancyBox
+            .classList
+            .remove("hidden");
+
+
+        document.getElementById(
+            "discrepancyStatus"
+        ).textContent =
+            data.discrepancy_status;
+
+    }
+
+    else {
+
+        discrepancyBox
+            .classList
+            .add("hidden");
+
+    }
+
+}
+
+</script>
+
+
+</body>
+
+</html>
